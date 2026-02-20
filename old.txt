@@ -1,0 +1,27 @@
+FROM palrobotics/public-tutorials-alum-devel
+
+ENV DEBIAN_FRONTEND=noninteractive
+SHELL ["/bin/bash", "-lc"]
+
+# Add ROS2 apt repo
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu jammy main" > /etc/apt/sources.list.d/ros2.list && \
+    apt-get update
+
+# Workspace
+ENV WS=/root/tiago_public_ws
+RUN mkdir -p ${WS}/src
+WORKDIR ${WS}
+
+# Import PAL public repos set
+RUN vcs import --input https://raw.githubusercontent.com/pal-robotics/tiago_tutorials/humble-devel/tiago_public.repos src
+
+# Install deps and build
+RUN source /opt/ros/humble/setup.bash && colcon build --symlink-install
+
+# Always source env
+RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc && \
+    echo "source ${WS}/install/setup.bash" >> /root/.bashrc && \
+    echo "export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp" >> /root/.bashrc
+
+CMD ["bash"]
