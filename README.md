@@ -75,7 +75,8 @@ cd simbridge
 pixi install
 ```
 
-when all the repos are built you can run 
+when all the repos are built you can run. Modify first the yaml file in circus/resources/config/path_constants.yaml with the absolute path of circus, simbridge and booster_sdk
+that you can find in the repo. circus and simbdrige are in the root directory booster_sdk is into the dockerfiles directory
 
 ```bash
 pixi run circus resources/scene/1vs1.yaml
