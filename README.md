@@ -1,85 +1,88 @@
-# TIAGo + Booster T1 Unified Docker
+# TIAGo + Booster T1 Simulation Stack
 
-A single Docker container with both **TIAGo** (PAL Robotics, Gazebo/ROS2) and **Booster T1** (Webots simulation) environments.
+Integrated simulation environment for heterogeneous robots: **TIAGo** (Gazebo/ROS2) and **Booster T1** (Webots), orchestrated by **Circus** (MuJoCo) via **SimBridge** (ROS2 bridge).
+
+## Clone the Repository
+
+This repository uses Git submodules for `circus` and `simbridge`. Clone with:
+
+```bash
+git clone --recurse-submodules https://github.com/michelebri/hri_projects.git
+cd hri_projects
+```
+
+If you've already cloned without submodules, initialize them:
+
+```bash
+git submodule update --init --recursive
+```
 
 ## Requirements
 
+### For Docker (TIAGo/Booster Webots)
 - Docker with NVIDIA GPU support (`nvidia-container-toolkit`)
-- X11 display (for Gazebo and Webots GUIs)
+- X11 display
 
-## Build
+### For Circus + SimBridge
+- **pixi** — [install from pixi.sh](https://pixi.sh)
+
+## Pixi Installation
+
+Pixi is a cross-platform package manager (conda-based). Install the version pixi 0.59.0 from 
 
 ```bash
-docker build -t tiago_booster .
+https://pixi.prefix.dev/latest/installation/#download-from-github-releases
 ```
 
-> First build takes ~30-40 min (downloads and compiles TIAGo workspace).
+## Installation instructions
+**Build the Docker image:**
+```bash
+cd dockerfiles
+docker build -t spqr:booster .
+```
 
-## Run
-
+**Run TIAGo:**
 ```bash
 bash start_tiago.sh
 ```
 
-This starts the container with:
-- NVIDIA GPU access
-- X11 display forwarding
-- `/exchange` folder mounted from host
+Inside the container, launch Gazebo:
+```bash
+ros2 launch tiago_gazebo tiago_gazebo.launch.py is_public_sim:=True
+```
+Check if Tiago spawn in gazebo to see if it works.
 
----
 
-## TIAGo Simulation (Gazebo)
+## Circus + SimBridge (Robot Booster T1 Integration)
 
-Open terminals inside the container (`docker exec -ti tiago_sim bash`).
+Circus is the main simulator that manages Docker containers and physics (MuJoCo). SimBridge bridges ROS2 to Circus for sensor/actuator communication.
 
-### Launch Gazebo simulation
+### Install and run Circus
 
 ```bash
-ros2 launch tiago_gazebo tiago_gazebo.launch.py
+cd circus
+pixi install
 ```
 
-### Useful topics
+The simulator will start and wait for robot containers to connect via Docker API
 
-| Topic | Type | Description |
-|-------|------|-------------|
-| `/joint_states` | `sensor_msgs/JointState` | All joint positions |
-| `/head_front_camera/rgb/image_raw` | `sensor_msgs/Image` | RGB camera |
-| `/head_front_camera/depth/image_raw` | `sensor_msgs/Image` | Depth camera |
-| `/scan` | `sensor_msgs/LaserScan` | Laser scan |
-| `/mobile_base_controller/odom` | `nav_msgs/Odometry` | Odometry |
-| `/cmd_vel` | `geometry_msgs/Twist` | Velocity commands |
+### Install SimBridge
 
-### Middleware
-
-TIAGo uses **CycloneDDS** (set via `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`).
-
----
-
-## Booster T1 Simulation (Webots)
-
-Requires **3 terminals** inside the container.
-
-### Terminal 1 — Launch Webots
+SimBridge runs automatically inside robot containers created by Circus. To install standalone dependencies:
 
 ```bash
-start-webots
+cd simbridge
+pixi install
 ```
 
-Opens Webots with the T1 world (`T1_release.wbt`). Wait until you see:
-
-```
-INFO: 'T1_release' extern controller: Waiting for local or remote connection on port 1234
-```
-
-### Terminal 2 — Launch the runner (mck controller)
+when all the repos are built you can run 
 
 ```bash
-start-runner
+pixi run circus resources/scene/1vs1.yaml
 ```
+It will spawn one container for each robot, inside each container you can see all the topics related to that robot.
 
-Connects `mck` to Webots on port 1234. The robot will initialize.
-
-### Terminal 3 — Control the robot
+### Control the robot inside the container
 
 ```bash
 loco
@@ -89,63 +92,7 @@ loco
 
 | Key | Action |
 |-----|--------|
-| `mp` | Mode: Prepare |
 | `mw` | Mode: Walking (stand up) |
-| `md` | Mode: Damping |
 | `w` | Walk forward |
-| `s` | Walk backward |
-| `a` | Strafe left |
-| `d` | Strafe right |
-| `q` | Rotate left |
-| `e` | Rotate right |
-| `gu` | Get up from ground |
-| `ld` | Lie down |
-| `hu/hd/hl/hr` | Head up/down/left/right |
-| `ho` | Head center |
 
-**Startup sequence:** `mp` → wait → `mw` to stand up.
-
-### ROS2 topics (Booster)
-
-Booster publishes only 2 ROS2 topics (via FastDDS loopback on `127.0.0.1`):
-
-| Topic | Description |
-|-------|-------------|
-| `/LocoApiTopicReq` | Commands sent to robot |
-| `/LocoApiTopicResp` | Responses from robot |
-
-To see them: `RMW_IMPLEMENTATION=rmw_fastrtps_cpp ros2 topic list`
-
-### Useful aliases
-
-| Alias | Description |
-|-------|-------------|
-| `start-webots` | Launch Webots with T1 world |
-| `start-runner` | Launch mck controller |
-| `start-runner-7dof` | Launch mck (7-DOF arms variant) |
-| `loco` | Launch loco client (keyboard control) |
-| `bmlog` | Show booster-motion log |
-| `bmerr` | Show booster-motion error log |
-
----
-
-## File Structure
-
-```
-.
-├── Dockerfile
-├── start_tiago.sh          # Docker run script
-├── README.md
-├── README_BOOSTER.md       # Booster T1 detailed notes
-└── booster/
-    ├── booster_robotics_sdk/       # Booster C++ SDK
-    ├── booster_robotics_sdk_ros2/  # Booster ROS2 SDK
-    ├── LocoApiPackage/             # ROS2 messages
-    ├── booster_motion/             # mck controller + libs
-    ├── configs/                    # system_settings_config.yaml
-    ├── webots_updated.zip          # Webots R2023b binary
-    ├── webots_simulation.zip       # T1 world files
-    ├── booster-runner-webots-full-0.0.11.run
-    └── booster-runner-full-webots-7dof_arms-0.0.3.run
-```
-# hri_projects
+**Startup sequence:** `mw` → wait → `w` to walk.
